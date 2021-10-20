@@ -1,0 +1,418 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances. Linked to AWS Parameter
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+Resources:
+  VPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 10.60.0.0/16
+     EnableDnsSupport: true
+     EnableDnsHostnames: true
+     Tags:
+      - Key: Name
+        Value: IDC-VPC1
+  InternetGateway1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IDC-IGW1
+  InternetGatewayAttachment1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway1
+      VpcId: !Ref VPC1
+
+  VPC2:
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 10.50.0.0/16
+     EnableDnsSupport: true
+     EnableDnsHostnames: true
+     Tags:
+      - Key: Name
+        Value: AWS-VPC2
+  InternetGateway2:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: AWS-IGW2
+          
+  InternetGatewayAttachment2:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway2
+      VpcId: !Ref VPC2
+
+  RouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: IDC-PublicRT1
+          
+  DefaultRoute1:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment1
+    Properties:
+      RouteTableId: !Ref RouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway1
+      
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.60.0.0/24
+      Tags:
+        - Key: Name
+          Value: IDC-VPC1-Subnet1
+          
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable1
+      SubnetId: !Ref Subnet1
+
+  RouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: IDC-PrivateRT1
+  Route2:
+    Type: AWS::EC2::Route
+    DependsOn: Instance1
+    Properties:
+      RouteTableId: !Ref RouteTable2
+      DestinationCidrBlock: 10.50.0.0/16
+      InstanceId: !Ref Instance1
+      
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.60.1.0/24
+      Tags:
+        - Key: Name
+          Value: IDC-VPC1-Subnet2
+          
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable2
+      SubnetId: !Ref Subnet2
+
+  VPCAWSSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+        VpcId:
+              Ref: VPC2
+        Tags:
+          - Key: Name
+            Value: AWS-PublicRT
+
+  VPCAWSInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway2
+    Properties:
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId:
+            Ref: InternetGateway2
+        RouteTableId:
+            Ref: VPCAWSSubnetRouteTable
+
+  VPCAWSSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+        VpcId: !Ref VPC2
+        CidrBlock: 10.50.1.0/24
+        AvailabilityZone: !Select [ 0, !GetAZs '' ]
+        Tags:
+          - Key: Name
+            Value: AWS-VPC2-Subnet
+
+  VPCAWSSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+        RouteTableId:
+            Ref: VPCAWSSubnetRouteTable
+        SubnetId:
+            Ref: VPCAWSSubnet
+            
+########### TGW 연결 서브넷 생성 ########################
+ 
+  VPC2RouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC2
+      Tags:
+        - Key: Name
+          Value: TGW-VPC2-TGWAttachRT
+
+  VPC2Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.50.2.0/24
+      Tags:
+        - Key: Name
+          Value: TGW-VPC2-Subnet2
+          
+  VPC2Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC2RouteTable2
+      SubnetId: !Ref VPC2Subnet2
+
+############# TGW 생성 ############
+      
+  TransitGateway1:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TGW1
+
+  TransitGatewayAtt1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC2
+    Properties:
+      VpcId: !Ref VPC2
+      SubnetIds:
+      - !Ref VPC2Subnet2
+      TransitGatewayId: !Ref TransitGateway1
+      Tags:
+        - Key: Name
+          Value: TGW1-ATT1-VPC2
+          
+  VPC2Route3:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt1
+    Properties:
+      RouteTableId: !Ref VPCAWSSubnetRouteTable
+      DestinationCidrBlock: 10.60.0.0/16
+      TransitGatewayId: !Ref TransitGateway1
+
+      
+###################################################################################
+
+  Instance1ENIEth0:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+        SubnetId: !Ref Subnet1
+        Description: Instance1 eth0
+        GroupSet:
+        - !Ref SG1
+        PrivateIpAddress: 10.60.0.100
+        SourceDestCheck: false
+        Tags:
+            - Key: Name
+              Value: IDC-CGW eth0
+  VPCEIP1:
+      Type: AWS::EC2::EIP
+      Properties:
+          Domain: vpc
+          
+  VPCAssociateEIP1:
+      Type: AWS::EC2::EIPAssociation
+      Properties:
+          AllocationId: !GetAtt VPCEIP1.AllocationId
+          NetworkInterfaceId: !Ref Instance1ENIEth0
+
+##############VPN 연결 설정################
+         
+  VPC2CGW:
+    Type: "AWS::EC2::CustomerGateway"
+    DependsOn: VPCEIP1
+    Properties:
+        Type: ipsec.1
+        BgpAsn: 65000
+        IpAddress:
+            Ref: VPCEIP1
+        Tags:
+          - Key: Name
+            Value: IDC-VPN-CGW
+
+  VPCAWSVpnConnection:
+    Type: AWS::EC2::VPNConnection
+    Properties:
+        Type: ipsec.1
+        StaticRoutesOnly: true
+        CustomerGatewayId:
+            !Ref VPC2CGW
+        TransitGatewayId:
+            !Ref TransitGateway1
+        VpnTunnelOptionsSpecifications:
+            - PreSharedKey: cloudneta
+        Tags:
+            - Key: Name
+              Value: AWS-VPNConnection-IDC
+
+  TGWStacticRoute:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      DestinationCidrBlock: 10.60.0.0/16
+      # 기본 transitgateway 라우팅테이블ID
+      TransitGatewayRouteTableId: tgw-rtb-076b543f421f5033f
+      # VPN연결시 생성된 transitgateway 연결ID      
+      TransitGatewayAttachmentId: tgw-attach-04a6e93212f17d572 
+
+################################################################
+
+  Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0bd7691bf6470fe9c
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: IDC-CGW
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref Instance1ENIEth0
+          DeviceIndex: 0
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostnamectl --static set-hostname IDC-CGW
+          yum -y install tcpdump openswan
+          cat <<EOF>> /etc/sysctl.conf
+          net.ipv4.ip_forward=1
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv4.conf.default.send_redirects = 0
+          net.ipv4.conf.eth0.send_redirects = 0
+          net.ipv4.conf.default.accept_redirects = 0
+          net.ipv4.conf.eth0.accept_redirects = 0
+          net.ipv4.conf.ip_vti0.rp_filter = 0
+          net.ipv4.conf.eth0.rp_filter = 0
+          net.ipv4.conf.default.rp_filter = 0
+          net.ipv4.conf.all.rp_filter = 0
+          EOF
+          sysctl -p /etc/sysctl.conf
+          curl -o /etc/ipsec.d/vpnconfig.sh https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter6/6_lab_s2s-vpnconfig.sh
+          chmod +x /etc/ipsec.d/vpnconfig.sh
+
+  Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0bd7691bf6470fe9c
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: IDC-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref Subnet2
+          GroupSet:
+          - !Ref SG2
+          PrivateIpAddress: 10.60.1.100
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          (
+          echo "qwe123"
+          echo "qwe123"
+          ) | passwd --stdin root
+          sed -i "s/^PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config
+          sed -i "s/^#PermitRootLogin yes/PermitRootLogin yes/g" /etc/ssh/sshd_config
+          service sshd restart
+          hostnamectl --static set-hostname IDC-EC2
+
+  Instance3:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0bd7691bf6470fe9c
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: AWS-EC2
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPCAWSSubnet
+          GroupSet:
+          - !Ref SG3
+          PrivateIpAddress: 10.50.1.100
+          AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostnamectl --static set-hostname AWS-EC2
+
+  SG1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: VPC1-IDC-CGW-SG
+      Tags:
+      - Key : Name
+        Value : VPC1-IDC-CGW-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: '4500'
+        ToPort: '4500'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  SG2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: VPC1-IDC-EC2-SG
+      Tags:
+      - Key : Name
+        Value : VPC1-IDC-EC2-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  SG3:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC2
+      GroupDescription: VPC2-AWS-EC2-SG
+      Tags:
+      - Key : Name
+        Value : VPC2-AWS-EC2-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+Outputs:
+  VPNGWInstanceEIP:
+    Description: Elastic IP assigned to VPNGW-Instance eth0 interface
+    Value: !GetAtt Instance1.PublicIp
+  AWSInstancePublic:
+    Description: Public IP assigned to AWS-Instance eth0 interface
+    Value: !GetAtt Instance3.PublicIp

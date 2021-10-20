@@ -1,0 +1,865 @@
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances. Linked to AWS Parameter
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  GAListenerARN:
+    Description: GA Listener ARN Name
+    Type: String
+
+Resources:
+# VPC1 Resource
+# VPC1 & IGW
+  VPC1:
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 10.3.0.0/16
+     EnableDnsSupport: true
+     EnableDnsHostnames: true
+     Tags:
+      - Key: Name
+        Value: VPC1-Singapore-AWS
+  VPC1InternetGateway1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-IGW1
+  VPC1InternetGatewayAttachment1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref VPC1InternetGateway1
+      VpcId: !Ref VPC1
+
+# VPC1 RT Route Subnet
+  VPC1RouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1RouteTable1
+  VPC1Route1:
+    Type: AWS::EC2::Route
+    DependsOn: VPC1InternetGatewayAttachment1
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPC1InternetGateway1
+
+  VPC1Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.3.1.0/24
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1Subnet1
+  VPC1Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable1
+      SubnetId: !Ref VPC1Subnet1
+
+# VPC1 Instance
+  VPC1Instance1ENI:
+   Type: AWS::EC2::NetworkInterface
+   Properties:
+       SubnetId: !Ref VPC1Subnet1
+       Description: VPC1Instance1 eth0
+       GroupSet:
+       - !Ref VPC1SG1
+       PrivateIpAddress: 10.3.1.100
+       SourceDestCheck: false
+       Tags:
+           - Key: Name
+             Value: VPC1-Singapore-AWS NATInstance1 eth0
+
+  VPC1Instance1:
+   Type: AWS::EC2::Instance
+   Properties:
+     ImageId: ami-037e3d0f6fefc2f5a
+     InstanceType: t2.micro
+     KeyName: !Ref KeyName
+     Tags:
+       - Key: Name
+         Value: Singapore-AWS-NATInstance1
+     NetworkInterfaces:
+       - NetworkInterfaceId: !Ref VPC1Instance1ENI
+         DeviceIndex: 0
+     UserData:
+       Fn::Base64: |
+         #!/bin/bash
+         hostname Singapore-AWS-NATInstance1
+         yum -y install tcpdump
+
+  VPC1SG1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: VPC1-Singapore-AWS-NATInstance-SecurityGroup
+      Tags:
+      - Key : Name
+        Value : VPC1-Singapore-AWS-NATInstance-SecurityGroup
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: '-1'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+# VPC1 RT Route Subnet
+  VPC1RouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC1
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1RouteTable2
+  VPC1Route2:
+    Type: AWS::EC2::Route
+    DependsOn: VPC1Instance1
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref VPC1Instance1
+  VPC1Subnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.3.3.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1Subnet3
+  VPC1Subnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable2
+      SubnetId: !Ref VPC1Subnet3
+  VPC1Subnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.3.4.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1Subnet4
+  VPC1Subnet4RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable2
+      SubnetId: !Ref VPC1Subnet4
+
+  VPC1Subnet5:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.3.5.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1Subnet5
+  VPC1Subnet6:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC1
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.3.6.0/24
+      Tags:
+        - Key: Name
+          Value: VPC1-Singapore-AWS-VPC1Subnet6
+
+  VPC1Instance3:
+    Type: AWS::EC2::Instance
+    DependsOn: VPC1Route2
+    Properties:
+      ImageId: ami-0d728fd4e52be968f
+      IamInstanceProfile : SSMLabInstanceProfile
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Singapore-AWS-WebSrv1
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC1Subnet3
+          GroupSet:
+          - !Ref VPC1SG2
+          PrivateIpAddress: 10.3.3.100
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          (
+          echo "qwe123"
+          echo "qwe123"
+          ) | passwd --stdin root
+          sed -i "s/^PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config
+          sed -i "s/^#PermitRootLogin yes/PermitRootLogin yes/g" /etc/ssh/sshd_config
+          service sshd restart
+          hostnamectl --static set-hostname Singapore-AWS-WebSrv1
+          amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+          yum install -y httpd lynx
+          systemctl start httpd && systemctl enable httpd
+          mkdir /var/www/inc
+          curl -o /var/www/inc/dbinfo.inc https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter8/dbinfo.inc
+          curl -o /var/www/html/db.php https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter8/db2.php
+          rm -rf /var/www/html/index.html
+          echo "<!DOCTYPE HTML><html><head><title>Paradigm Shift by HTML5 UP</title><meta charset="utf-8"/><meta name="viewport"content="width=device-width, initial-scale=1, user-scalable=no"/><meta name="description"content=""/><meta name="keywords"content=""/><link rel="stylesheet"href="assets/css/main.css"/></head><body class="is-preload"><!--Wrapper--><div id="wrapper"><!--Intro--><section class="intro"><header><h1>Paradigm Shift</h1><p>A free responsive site template designed by<a href="https://twitter.com/ajlkn">@ajlkn</a>/<a href="https://html5up.net">HTML5 UP</a></p><ul class="actions"><li><a href="#first"class="arrow scrolly"><span class="label">Next</span></a></li></ul></header><div class="content"><span class="image fill"data-position="center"><img src="images/pic01.jpg"alt=""/></span></div></section><!--Section--><section id="first"><header><h2>Magna sed nullam nisl adipiscing</h2></header><div class="content"><p><strong>Lorem ipsum dolor</strong>sit amet consectetur adipiscing elit.Duis dapibus rutrum facilisis.Class aptent taciti sociosqu ad litora torquent per conubia nostra,per inceptos himenaeos.Etiam tristique libero eu nibh porttitor amet fermentum.Nullam venenatis erat id vehicula ultrices sed ultricies condimentum.Magna sed etiam consequat,et lorem adipiscing sed nulla.Volutpat nisl et tempus et dolor libero,feugiat magna tempus,sed et lorem adipiscing.</p><span class="image main"><img src="images/pic02.jpg"alt=""/></span></div></section><!--Section--><section><header><h2>Feugiat consequat tempus ultrices</h2></header><div class="content"><p><strong>Etiam tristique libero</strong>eu nibh porttitor amet fermentum.Nullam venenatis erat id vehicula ultrices sed ultricies condimentum.</p><ul class="feature-icons"><li class="icon solid fa-laptop">Consequat tempus</li><li class="icon solid fa-bolt">Etiam adipiscing</li><li class="icon solid fa-signal">Libero nullam</li><li class="icon solid fa-cog">Blandit condimentum</li><li class="icon solid fa-map-marker-alt">Lorem ipsum dolor</li><li class="icon solid fa-code">Nibh amet venenatis</li></ul><p>Vehicula ultrices sed ultricies condimentum.Magna sed etiam consequat,et lorem adipiscing sed nulla.Volutpat nisl et tempus et dolor libero,feugiat magna tempus,sed et lorem adipiscing.</p></div></section><!--Section--><section><header><h2>Ultrices erat magna sed condimentum</h2></header><div class="content"><p><strong>Integer mollis egestas</strong>nam maximus erat id euismod egestas.Pellentesque sapien ac quam.Lorem ipsum dolor sit nullam.</p><!--Section--><section><header><h3>Erat aliquam</h3><p>Vehicula ultrices dolor amet ultricies et condimentum.Magna sed etiam consequat,et lorem adipiscing sed dolor sit amet,consectetur amet do eiusmod tempor incididunt ipsum suspendisse ultrices gravida.</p></header><div class="content"><div class="gallery"><a href="images/gallery/fulls/01.jpg"class="landscape"><img src="images/gallery/thumbs/01.jpg"alt=""/></a><a href="images/gallery/fulls/02.jpg"><img src="images/gallery/thumbs/02.jpg"alt=""/></a><a href="images/gallery/fulls/03.jpg"><img src="images/gallery/thumbs/03.jpg"alt=""/></a><a href="images/gallery/fulls/04.jpg"class="landscape"><img src="images/gallery/thumbs/04.jpg"alt=""/></a></div></div></section><!--Section--><section><header><h3>Nisl consequat</h3><p>Aenean ornare velit lacus,ac varius enim ullamcorper eu.Proin aliquam sed facilisis ante interdum congue.Integer mollis,nisl amet convallis,porttitor magna ullamcorper,amet mauris.Ut magna finibus nisi nec lacinia ipsum maximus.</p></header><div class="content"><div class="gallery"><a href="images/gallery/fulls/05.jpg"class="landscape"><img src="images/gallery/thumbs/05.jpg"alt=""/></a><a href="images/gallery/fulls/06.jpg"><img src="images/gallery/thumbs/06.jpg"alt=""/></a><a href="images/gallery/fulls/07.jpg"><img src="images/gallery/thumbs/07.jpg"alt=""/></a></div></div></section><!--Section--><section><header><h3>Lorem gravida</h3><p>Proin aliquam facilisis ante interdum.Sed nulla amet lorem feugiat tempus aenean ornare velit lacus,ac varius sed enim lorem ullamcorper dolore.ac varius enim lorem ullamcorper dolore.Proin aliquam facilisis.</p></header><div class="content"><div class="gallery"><a href="images/gallery/fulls/08.jpg"class="portrait"><img src="images/gallery/thumbs/08.jpg"alt=""/></a><a href="images/gallery/fulls/09.jpg"class="portrait"><img src="images/gallery/thumbs/09.jpg"alt=""/></a><a href="images/gallery/fulls/10.jpg"class="landscape"><img src="images/gallery/thumbs/10.jpg"alt=""/></a></div></div></section></div></section><!--Section--><section><header><h2>Duis sed adpiscing veroeros amet</h2></header><div class="content"><p><strong>Proin tempus feugiat</strong>sed varius enim lorem ullamcorper dolore aliquam aenean ornare velit lacus,ac varius enim lorem ullamcorper dolore.</p><ul class="actions"><li><a href="#"class="button primary large">Get Started</a></li><li><a href="#"class="button large">Learn More</a></li></ul></div></section><!--Elements--><!--<section><header><h2>Elements</h2></header><div class="content"><section><header><h3>Text</h3></header><div class="content"><p>This is<b>bold</b>and this is<strong>strong</strong>.This is<i>italic</i>and this is<em>emphasized</em>.This is<sup>superscript</sup>text and this is<sub>subscript</sub>text.This is<u>underlined</u>and this is code:<code>for(;;){...}</code>.Finally,<a href="#">this is a link</a>.</p><hr/><h2>Heading Level 2</h2><h3>Heading Level 3</h3><h4>Heading Level 4</h4><h5>Heading Level 5</h5><hr/><h5>Blockquote</h5><blockquote>Fringilla nisl.Donec accumsan interdum nisi,quis tincidunt felis sagittis eget tempus euismod.Vestibulum ante ipsum primis in faucibus vestibulum.Blandit adipiscing eu felis iaculis volutpat ac adipiscing accumsan faucibus.Vestibulum ante ipsum primis in faucibus lorem ipsum dolor sit amet nullam adipiscing eu felis.</blockquote><h5>Preformatted</h5><pre><code>i=0;while(!deck.isInOrder()){print'Iteration '+i;deck.shuffle();i++}print'Sorted in '+i+' iterations.';</code></pre></div></section><section><header><h3>Lists</h3></header><div class="content"><h4>Unordered</h4><ul><li>Dolor pulvinar etiam.</li><li>Sagittis adipiscing.</li><li>Felis enim feugiat.</li></ul><h4>Alternate</h4><ul class="alt"><li>Dolor pulvinar etiam.</li><li>Sagittis adipiscing.</li><li>Felis enim feugiat.</li></ul><h4>Ordered</h4><ol><li>Dolor pulvinar etiam.</li><li>Etiam vel felis viverra.</li><li>Felis enim feugiat.</li><li>Dolor pulvinar etiam.</li><li>Etiam vel felis lorem.</li><li>Felis enim et feugiat.</li></ol><h4>Icons</h4><ul class="icons"><li><a href="#"class="icon brands fa-twitter"><span class="label">Twitter</span></a></li><li><a href="#"class="icon brands fa-facebook-f"><span class="label">Facebook</span></a></li><li><a href="#"class="icon brands fa-instagram"><span class="label">Instagram</span></a></li><li><a href="#"class="icon brands fa-github"><span class="label">Github</span></a></li></ul><h4>Actions</h4><ul class="actions"><li><a href="#"class="button primary">Default</a></li><li><a href="#"class="button">Default</a></li></ul><ul class="actions stacked"><li><a href="#"class="button primary">Default</a></li><li><a href="#"class="button">Default</a></li></ul></div></section><section><header><h3>Table</h3></header><div class="content"><h4>Default</h4><div class="table-wrapper"><table><thead><tr><th>Name</th><th>Description</th><th>Price</th></tr></thead><tbody><tr><td>Item One</td><td>Ante turpis integer aliquet porttitor.</td><td>29.99</td></tr><tr><td>Item Two</td><td>Vis ac commodo adipiscing arcu aliquet.</td><td>19.99</td></tr><tr><td>Item Three</td><td>Morbi faucibus arcu accumsan lorem.</td><td>29.99</td></tr><tr><td>Item Four</td><td>Vitae integer tempus condimentum.</td><td>19.99</td></tr><tr><td>Item Five</td><td>Ante turpis integer aliquet porttitor.</td><td>29.99</td></tr></tbody><tfoot><tr><td colspan="2"></td><td>100.00</td></tr></tfoot></table></div><h4>Alternate</h4><div class="table-wrapper"><table class="alt"><thead><tr><th>Name</th><th>Description</th><th>Price</th></tr></thead><tbody><tr><td>Item One</td><td>Ante turpis integer aliquet porttitor.</td><td>29.99</td></tr><tr><td>Item Two</td><td>Vis ac commodo adipiscing arcu aliquet.</td><td>19.99</td></tr><tr><td>Item Three</td><td>Morbi faucibus arcu accumsan lorem.</td><td>29.99</td></tr><tr><td>Item Four</td><td>Vitae integer tempus condimentum.</td><td>19.99</td></tr><tr><td>Item Five</td><td>Ante turpis integer aliquet porttitor.</td><td>29.99</td></tr></tbody><tfoot><tr><td colspan="2"></td><td>100.00</td></tr></tfoot></table></div></div></section><section><header><h3>Buttons</h3></header><div class="content"><ul class="actions"><li><a href="#"class="button primary">Primary</a></li><li><a href="#"class="button">Default</a></li></ul><ul class="actions"><li><a href="#"class="button large">Large</a></li><li><a href="#"class="button">Default</a></li><li><a href="#"class="button small">Small</a></li></ul><ul class="actions"><li><a href="#"class="button primary icon solid fa-download">Icon</a></li><li><a href="#"class="button icon solid fa-download">Icon</a></li></ul><ul class="actions"><li><span class="button primary disabled">Disabled</span></li><li><span class="button disabled">Disabled</span></li></ul></div></section><section><header><h3>Form</h3></header><div class="content"><form method="post"action="#"><div class="fields"><div class="field half"><label for="demo-name">Name</label><input type="text"name="demo-name"id="demo-name"value=""placeholder="Jane Doe"/></div><div class="field half"><label for="demo-email">Email</label><input type="email"name="demo-email"id="demo-email"value=""placeholder="jane@untitled.tld"/></div><div class="field"><label for="demo-category">Category</label><select name="demo-category"id="demo-category"><option value="">-</option><option value="1">Manufacturing</option><option value="1">Shipping</option><option value="1">Administration</option><option value="1">Human Resources</option></select></div><div class="field half"><input type="radio"id="demo-priority-low"name="demo-priority"checked><label for="demo-priority-low">Low</label></div><div class="field half"><input type="radio"id="demo-priority-high"name="demo-priority"><label for="demo-priority-high">High</label></div><div class="field half"><input type="checkbox"id="demo-copy"name="demo-copy"><label for="demo-copy">Email me a copy</label></div><div class="field half"><input type="checkbox"id="demo-human"name="demo-human"checked><label for="demo-human">Not a robot</label></div><div class="field"><label for="demo-message">Message</label><textarea name="demo-message"id="demo-message"placeholder="Enter your message"rows="6"></textarea></div></div><ul class="actions"><li><input type="submit"value="Send Message"class="primary"/></li><li><input type="reset"value="Reset"/></li></ul></form></div></section></div></section>--><!--Section--><section><header><h2>Get in touch</h2></header><div class="content"><p><strong>Auctor commodo</strong>interdum et malesuada fames ac ante ipsum primis in faucibus.Pellentesque venenatis dolor imperdiet dolor mattis sagittis.</p><form><div class="fields"><div class="field half"><input type="text"name="name"id="name"placeholder="Name"/></div><div class="field half"><input type="email"name="email"id="email"placeholder="Email"/></div><div class="field"><textarea name="message"id="message"placeholder="Message"rows="7"></textarea></div></div><ul class="actions"><li><input type="submit"value="Send Message"class="button primary"/></li></ul></form></div><footer><ul class="items"><li><h3>Email</h3><a href="#">information@untitled.ext</a></li><li><h3>Phone</h3><a href="#">(000)000-0000</a></li><li><h3>Address</h3><span>1234 Somewhere Road,Nashville,TN 00000</span></li><li><h3>Elsewhere</h3><ul class="icons"><li><a href="#"class="icon brands fa-twitter"><span class="label">Twitter</span></a></li><li><a href="#"class="icon brands fa-facebook-f"><span class="label">Facebook</span></a></li><li><a href="#"class="icon brands fa-instagram"><span class="label">Instagram</span></a></li><li><a href="#"class="icon brands fa-linkedin-in"><span class="label">LinkedIn</span></a></li><li><a href="#"class="icon brands fa-github"><span class="label">GitHub</span></a></li><li><a href="#"class="icon brands fa-codepen"><span class="label">Codepen</span></a></li></ul></li></ul></footer></section><!--Copyright--><div class="copyright">&copy;Untitled.All rights reserved.Design:<a href="https://html5up.net">HTML5 UP</a>.Demo Images:<a href="https://unsplash.com">Unsplash</a>.</div></div><!--Scripts--><script src="assets/js/jquery.min.js"></script><script src="assets/js/jquery.scrolly.min.js"></script><script src="assets/js/browser.min.js"></script><script src="assets/js/breakpoints.min.js"></script><script src="assets/js/util.js"></script><script src="assets/js/main.js"></script></body></html>" > /var/www/html/index.html
+          curl -o /opt/pingcheck.sh https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter8/pingchecker2.sh
+          chmod +x /opt/pingcheck.sh
+          cat <<EOT>> /etc/crontab
+          */3 * * * * root /opt/pingcheck.sh
+          EOT
+          echo "1" > /var/www/html/HealthCheck.txt
+
+  VPC1SG2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: VPC1-Singapore-AWS-WebSrv-SecurityGroup
+      Tags:
+      - Key : Name
+        Value : VPC1-Singapore-AWS-WebSrv-SecurityGroup
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  VPC1SG4:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC1
+      GroupDescription: VPC1-Singapore-AWS-Resolver-SG
+      Tags:
+      - Key : Name
+        Value : VPC1-Singapore-AWS-Resolver-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '53'
+        ToPort: '53'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: udp
+        FromPort: '53'
+        ToPort: '53'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+# PrivateDNS
+  PrivateDNS1:
+    Type: AWS::Route53::HostedZone
+    DependsOn: VPC1
+    Properties:
+      HostedZoneConfig:
+        Comment: Private hosted zone for awssingapore.internal
+      Name: awssingapore.internal
+      VPCs:
+        - VPCId: !Ref VPC1
+          VPCRegion: ap-southeast-1
+      HostedZoneTags:
+        - Key: Name
+          Value: aws-singapore-internal-domain
+
+  DNSRecordVPC1Instance3:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref PrivateDNS1
+      Comment: DNS name for AWS Singapore WEBSRV1 instance.
+      Name: websrv1.awssingapore.internal
+      Type: A
+      TTL: 60
+      ResourceRecords:
+      - !GetAtt VPC1Instance3.PrivateIp
+
+# Route53 Resolver
+  InboundResolverEndpoint:
+    Type : AWS::Route53Resolver::ResolverEndpoint
+    Properties :
+      Direction : Inbound
+      IpAddresses :
+        - SubnetId: !Ref VPC1Subnet3
+          Ip: 10.3.3.250
+        - SubnetId: !Ref VPC1Subnet4
+          Ip: 10.3.4.250
+      Name : AWS Inbound Endpoint
+      SecurityGroupIds :
+        - !Ref VPC1SG4
+      Tags :
+        - Key: Name
+          Value: AWSSingaporeInboundEndpoint
+
+  OutboundResolverEndpoint:
+    Type : AWS::Route53Resolver::ResolverEndpoint
+    Properties :
+      Direction : Outbound
+      IpAddresses :
+        - SubnetId: !Ref VPC1Subnet3
+          Ip: 10.3.3.251
+        - SubnetId: !Ref VPC1Subnet4
+          Ip: 10.3.4.251
+      Name : AWS Outbound Endpoint
+      SecurityGroupIds :
+        - !Ref VPC1SG4
+      Tags :
+        - Key: Name
+          Value: AWSSingaporeOutboundEndpoint
+
+  ResolverRule1:
+    Type: AWS::Route53Resolver::ResolverRule
+    Properties:
+      RuleType: FORWARD
+      DomainName: idcsingapore.internal
+      Name: idc singapore rule
+      ResolverEndpointId: !Ref OutboundResolverEndpoint
+      Tags:
+        - Key: Name
+          Value: idc singapore rule
+      TargetIps:
+        - Ip : 10.4.1.200
+          Port : 53
+  ResolverRule2:
+    Type: AWS::Route53Resolver::ResolverRule
+    Properties:
+      RuleType: FORWARD
+      DomainName: idcseoul.internal
+      Name: idc seoul rule
+      ResolverEndpointId: !Ref OutboundResolverEndpoint
+      Tags:
+        - Key: Name
+          Value: idc seoul rule
+      TargetIps:
+        - Ip : 10.2.1.200
+          Port : 53
+  ResolverRule3:
+    Type: AWS::Route53Resolver::ResolverRule
+    Properties:
+      RuleType: FORWARD
+      DomainName: awsseoul.internal
+      Name: aws seoul rule
+      ResolverEndpointId: !Ref OutboundResolverEndpoint
+      Tags:
+        - Key: Name
+          Value: aws seoul rule
+      TargetIps:
+        - Ip : 10.1.3.250
+          Port : 53
+        - Ip : 10.1.4.250
+          Port : 53
+
+  ResolverRuleAssociation1:
+    Type: AWS::Route53Resolver::ResolverRuleAssociation
+    Properties:
+      Name: RuleAssociation1
+      ResolverRuleId: !Ref ResolverRule1
+      VPCId: !Ref VPC1
+  ResolverRuleAssociation2:
+    Type: AWS::Route53Resolver::ResolverRuleAssociation
+    Properties:
+      Name: RuleAssociation2
+      ResolverRuleId: !Ref ResolverRule2
+      VPCId: !Ref VPC1
+  ResolverRuleAssociation3:
+    Type: AWS::Route53Resolver::ResolverRuleAssociation
+    Properties:
+      Name: RuleAssociation3
+      ResolverRuleId: !Ref ResolverRule3
+      VPCId: !Ref VPC1
+
+# VPC1 EIP1
+  VPCEIP1:
+      Type: AWS::EC2::EIP
+      Properties:
+          Domain: vpc
+
+# TGW Resource
+  TransitGateway2:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TGW2
+
+  TransitGatewayAtt1:
+    Type: AWS::EC2::TransitGatewayAttachment
+    DependsOn: VPC1
+    Properties:
+      VpcId: !Ref VPC1
+      SubnetIds:
+      - !Ref VPC1Subnet5
+      - !Ref VPC1Subnet6
+      TransitGatewayId: !Ref TransitGateway2
+      Tags:
+        - Key: Name
+          Value: TGW2-ATT1-VPC1
+
+  VPC1Route4:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAtt1
+    Properties:
+      RouteTableId: !Ref VPC1RouteTable2
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway2
+
+  VPC1CGW:
+    Type: "AWS::EC2::CustomerGateway"
+    DependsOn: VPCEIP1
+    Properties:
+        Type: ipsec.1
+        BgpAsn: 65000
+        IpAddress:
+            Ref: VPCEIP1
+        Tags:
+          - Key: Name
+            Value: VPC1-Singapore-AWS-CGW
+
+  VPC1AWSVpnConnection:
+    Type: "AWS::EC2::VPNConnection"
+    Properties:
+        Type: ipsec.1
+        StaticRoutesOnly: true
+        CustomerGatewayId:
+            !Ref VPC1CGW
+        TransitGatewayId:
+            !Ref TransitGateway2
+        VpnTunnelOptionsSpecifications:
+            - PreSharedKey: cloudneta
+        Tags:
+            - Key: Name
+              Value: VPC1-Singapore-AWS-VPNConnection-IDC
+
+# GA
+  GAEndpointGroup:
+    Type: AWS::GlobalAccelerator::EndpointGroup
+    DependsOn: VPC1Instance3
+    Properties:
+      ListenerArn: !Ref GAListenerARN
+      EndpointGroupRegion: !Ref AWS::Region
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: '/HealthCheck.txt'
+      HealthCheckIntervalSeconds: 10
+      ThresholdCount: 5
+      EndpointConfigurations:
+        - EndpointId: !Ref VPC1Instance3
+
+
+# VPC2 Resource
+# VPC2 & IGW
+  VPC2:
+    Type: AWS::EC2::VPC
+    Properties:
+     CidrBlock: 10.4.0.0/16
+     EnableDnsSupport: false
+     EnableDnsHostnames: false
+     Tags:
+      - Key: Name
+        Value: VPC2-Singapore-IDC
+  VPC2DNSOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: idcSingapore.internal
+      DomainNameServers:
+        - 10.4.1.200, 8.8.8.8
+      Tags:
+        - Key: Name
+          Value: VPC2-Singapore-IDC-DHCPOptions
+  VPC2DNSOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      DhcpOptionsId: !Ref VPC2DNSOptions
+      VpcId: !Ref VPC2
+
+  VPC2InternetGateway1:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: VPC2-Singapore-IDC-IGW1
+  VPC2InternetGatewayAttachment1:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref VPC2InternetGateway1
+      VpcId: !Ref VPC2
+
+# VPC2 RT Route Subnet
+  VPC2RouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC2
+      Tags:
+        - Key: Name
+          Value: VPC2-Singapore-IDC-VPC2RouteTable1
+  VPC2Route1:
+    Type: AWS::EC2::Route
+    DependsOn: VPC2InternetGatewayAttachment1
+    Properties:
+      RouteTableId: !Ref VPC2RouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPC2InternetGateway1
+
+  VPC2Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC2
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.4.1.0/24
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: VPC2-Singapore-IDC-VPC2Subnet1
+  VPC2Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref VPC2RouteTable1
+      SubnetId: !Ref VPC2Subnet1
+
+  VPC2Route2:
+    Type: AWS::EC2::Route
+    DependsOn: VPC2Instance1
+    Properties:
+      RouteTableId: !Ref VPC2RouteTable1
+      DestinationCidrBlock: 10.0.0.0/8
+      InstanceId: !Ref VPC2Instance1
+
+  VPC2Instance1ENI:
+    Type: AWS::EC2::NetworkInterface
+    Properties:
+        SubnetId: !Ref VPC2Subnet1
+        Description: Instance1 eth0
+        GroupSet:
+        - !Ref VPC2SG1
+        PrivateIpAddress: 10.4.1.240
+        SourceDestCheck: false
+        Tags:
+            - Key: Name
+              Value: VPC2-Singapore-IDC Instance1 eth0
+
+  VPCAssociateEIP1:
+      Type: AWS::EC2::EIPAssociation
+      Properties:
+          AllocationId: !GetAtt VPCEIP1.AllocationId
+          NetworkInterfaceId: !Ref VPC2Instance1ENI
+
+# Instance
+  VPC2Instance1:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d728fd4e52be968f
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Singapore-IDC-CGW
+      NetworkInterfaces:
+        - NetworkInterfaceId: !Ref VPC2Instance1ENI
+          DeviceIndex: 0
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostnamectl --static set-hostname Singapore-IDC-CGW
+          yum -y install tcpdump openswan
+          cat <<EOF>> /etc/sysctl.conf
+          net.ipv4.ip_forward=1
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv4.conf.default.send_redirects = 0
+          net.ipv4.conf.eth0.send_redirects = 0
+          net.ipv4.conf.default.accept_redirects = 0
+          net.ipv4.conf.eth0.accept_redirects = 0
+          net.ipv4.conf.ip_vti0.rp_filter = 0
+          net.ipv4.conf.eth0.rp_filter = 0
+          net.ipv4.conf.default.rp_filter = 0
+          net.ipv4.conf.all.rp_filter = 0
+          net.ipv4.conf.default.accept_source_route = 0
+          EOF
+          sysctl -p /etc/sysctl.conf
+          curl -o /etc/ipsec.d/vpnconfig.sh https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter8/8_lab_vpnconfig_singapore.sh
+          chmod +x /etc/ipsec.d/vpnconfig.sh
+
+  VPC2Instance2:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0d728fd4e52be968f
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Singapore-IDC-DB
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC2Subnet1
+          GroupSet:
+          - !Ref VPC2SG2
+          PrivateIpAddress: 10.4.1.100
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostnamectl --static set-hostname Singapore-IDC-DB
+          yum install -y mariadb-server mariadb lynx
+          systemctl start mariadb && systemctl enable mariadb
+          echo -e "\n\nqwe123\nqwe123\ny\ny\ny\ny\n" | /usr/bin/mysql_secure_installation
+          mysql -uroot -pqwe123 -e "CREATE DATABASE sample; GRANT SELECT ON *.* TO 'gasida'@'%' IDENTIFIED BY 'qwe123'; flush privileges;"
+          mysql -uroot -pqwe123 -e "USE sample;CREATE TABLE EMPLOYEES (ID int(11) UNSIGNED AUTO_INCREMENT PRIMARY KEY,NAME VARCHAR(45),ADDRESS VARCHAR(90));"
+          cat <<EOT> /etc/my.cnf
+          [mysqld]
+          datadir=/var/lib/mysql
+          socket=/var/lib/mysql/mysql.sock
+          symbolic-links=0
+          #아래부분만 추가하면 됨
+          log-bin=mysql-bin
+          server-id=2
+          read_only=1
+          replicate-do-db='sample'
+          [mysqld_safe]
+          log-error=/var/log/mariadb/mariadb.log
+          pid-file=/var/run/mariadb/mariadb.pid
+          !includedir /etc/my.cnf.d
+          EOT
+          systemctl restart mariadb
+          cat <<EOT> /home/ec2-user/list.txt
+          10.1.3.100
+          websrv1.awsseoul.internal
+          10.1.4.100
+          websrv2.awsseoul.internal
+          10.2.1.100
+          dbsrv.idcseoul.internal
+          10.2.1.200
+          dnssrv.idcseoul.internal
+          10.3.3.100
+          websrv1.awssingapore.internal
+          10.4.1.100
+          dbsrv.idcsingapore.internal
+          10.4.1.200
+          dnssrv.idcsingapore.internal
+          EOT
+          curl -o /home/ec2-user/pingall.sh https://cloudneta-book.s3.ap-northeast-2.amazonaws.com/chapter6/pingall.sh --silent
+          chmod +x /home/ec2-user/pingall.sh
+
+  VPC2Instance3:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-06a0ca371ae26876b
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      Tags:
+        - Key: Name
+          Value: Singapore-IDC-DNSSRV
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref VPC2Subnet1
+          GroupSet:
+          - !Ref VPC2SG3
+          PrivateIpAddress: 10.4.1.200
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          hostnamectl --static set-hostname Singapore-IDC-DNSSRV
+          sed -i "s/^127.0.0.1 localhost/127.0.0.1 localhost VPC2-Singapore-IDC-DNSSRV/g" /etc/hosts
+          apt-get update -y
+          apt-get install bind9 bind9-doc language-pack-ko -y
+          # named.conf.options
+          cat <<EOF> /etc/bind/named.conf.options
+          options {
+             directory "/var/cache/bind";
+             recursion yes;
+             allow-query { any; };
+             forwarders {
+                   8.8.8.8;
+                    };
+              forward only;
+              auth-nxdomain no;
+          };
+          zone "awssingapore.internal" {
+              type forward;
+              forward only;
+              forwarders { 10.3.3.250; 10.3.4.250; };
+          };
+          zone "awsseoul.internal" {
+              type forward;
+              forward only;
+              forwarders { 10.1.3.250; 10.1.4.250; };
+          };
+          zone "idcseoul.internal" {
+              type forward;
+              forward only;
+              forwarders { 10.2.1.200; };
+          };
+          EOF
+
+          # named.conf.local
+          cat <<EOF> /etc/bind/named.conf.local
+          zone "idcsingapore.internal" {
+              type master;
+              file "/etc/bind/db.idcsingapore.internal"; # zone file path
+          };
+
+          zone "2.10.in-addr.arpa" {
+              type master;
+              file "/etc/bind/db.10.4";  # 10.4.0.0/16 subnet
+          };
+          EOF
+
+          # db.idcsingapore.internal
+          cat <<EOF> /etc/bind/db.idcsingapore.internal
+          \$TTL 30
+          @ IN SOA idcsingapore.internal. root.idcsingapore.internal. (
+            2019122114 ; serial
+            3600       ; refresh
+            900        ; retry
+            604800     ; expire
+            86400      ; minimum ttl
+          )
+
+          ; dns server
+          @      IN NS ns1.idcsingapore.internal.
+
+          ; ip address of dns server
+          ns1    IN A  10.4.1.200
+
+          ; Hosts
+          dbsrv   IN A  10.4.1.100
+          dnssrv   IN A  10.4.1.200
+          EOF
+          # db.10.4
+          cat <<EOF> /etc/bind/db.10.4
+          \$TTL 30
+          @ IN SOA idcsingapore.internal. root.idcsingapore.internal. (
+            2019122114 ; serial
+            3600       ; refresh
+            900        ; retry
+            604800     ; expire
+            86400      ; minimum ttl
+          )
+
+          ; dns server
+          @      IN NS ns1.idcsingapore.internal.
+
+          ; ip address of dns server
+          3      IN PTR  ns1.idcsingapore.internal.
+
+          ; A Record list
+          100.1    IN PTR  dbsrv.idcsingapore.internal.
+          200.1    IN PTR  dnssrv.idcsingapore.internal.
+          EOF
+          # bind9 service start
+          systemctl start bind9 && systemctl enable bind9
+
+  VPC2SG1:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC2
+      GroupDescription: VPC2-Singapore-IDC-CGWInstance-SG
+      Tags:
+      - Key : Name
+        Value : VPC2-Singapore-IDC-CGWInstance-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: '500'
+        ToPort: '500'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: '4500'
+        ToPort: '4500'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: '-1'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  VPC2SG2:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC2
+      GroupDescription: VPC2-Singapore-IDC-DB-SG
+      Tags:
+      - Key : Name
+        Value : VPC2-Singapore-IDC-DB-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '3306'
+        ToPort: '3306'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+
+  VPC2SG3:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC2
+      GroupDescription: VPC2-Singapore-IDC-DNSSRV-SG
+      Tags:
+      - Key : Name
+        Value : VPC2-Singapore-IDC-DNSSRV-SG
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: udp
+        FromPort: '53'
+        ToPort: '53'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: '53'
+        ToPort: '53'
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: icmp
+        FromPort: -1
+        ToPort: -1
+        CidrIp: 0.0.0.0/0
+        
+###################  Peering 연결###################
+        
+  TGWStaticRoute:  
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      DestinationCidrBlock: 10.1.0.0/16
+      #기본 transitgateway 라우팅테이블 id 싱가폴꺼
+      TransitGatewayRouteTableId: tgw-rtb-06f62781e75e9780d
+      #Peering 연결시  생성된 transitgateway 연결 id
+      TransitGatewayAttachmentId: tgw-attach-0fc34df2c6346df14
+        
+        
+###################################################################
+
+Outputs:
+  SingaporeTransitGatewayID:
+    Description: Singapore TransitGateway ID
+    Value: !Ref TransitGateway2
+  CGWVPC2Instance1:
+    Description: Public IP assigned to VPC2 Instance1 eth0 interface
+    Value: !GetAtt VPC2Instance1.PublicIp
+  SlaveDBVPC2Instance2:
+    Description: Public IP assigned to VPC2 Instance2 eth0 interface
+    Value: !GetAtt VPC2Instance2.PublicIp
